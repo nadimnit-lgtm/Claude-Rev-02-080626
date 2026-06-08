@@ -10,6 +10,7 @@ jobs:
   build:
     name: Validate and build debug APK
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,10 +24,44 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Set up Gradle (cache + resilient distribution download)
+        uses: gradle/actions/setup-gradle@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
+      - name: Validate required files
+        run: |
+          set -e
+          required=(
+            settings.gradle build.gradle gradle.properties
+            gradlew gradlew.bat
+            gradle/wrapper/gradle-wrapper.jar gradle/wrapper/gradle-wrapper.properties
+            app/build.gradle app/src/main/AndroidManifest.xml
+            app/src/main/java/com/ahmed/azkartv/MainActivity.kt
+            app/src/main/assets/index.html app/src/main/assets/app.css app/src/main/assets/app.js
+            app/src/main/assets/fonts/NotoNastaliqUrdu-Regular.ttf
+            app/src/main/assets/content/content.json app/src/main/assets/content/sections.json
+            app/src/main/res/drawable-xhdpi/tv_banner.png
+            tools/validate.py tools/test_logic.py
+            .github/workflows/build-apk.yml
+          )
+          for f in "${required[@]}"; do
+            if [ ! -f "$f" ]; then echo "::error::missing required file $f"; exit 1; fi
+          done
+          echo "All required files present."
+
+      - name: Validate JSON syntax
+        run: |
+          python3 -c "import json,glob,sys
+          bad=0
+          for f in glob.glob('app/src/main/assets/content/*.json'):
+              try: json.load(open(f,encoding='utf-8'))
+              except Exception as e:
+                  print(f'::error::invalid JSON {f}: {e}'); bad=1
+          sys.exit(bad)"
 
       - name: Check for duplicate Arabic content and run full validation
         run: python3 tools/validate.py
